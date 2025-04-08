@@ -18,6 +18,11 @@ function initializeApp() {
     UI.toggleVideoBtn.addEventListener('click', toggleLocalVideo);
     UI.localVolumeSlider.addEventListener('input', adjustLocalVolume);
     
+    // Inicializa a UI do agente AI
+    if (window.AgentUI) {
+        AgentUI.initialize();
+    }
+    
     console.log('Aplicação inicializada');
 }
 
@@ -116,6 +121,11 @@ async function joinChannel() {
             // Atualiza a UI
             updateUIState('joined');
             isJoined = true;
+            
+            // Atualiza o estado da UI do agente
+            if (window.AgentUI) {
+                AgentUI.updateState('joined');
+            }
         } catch (error) {
             // Se houver erro ao criar ou publicar as tracks
             console.error("Erro ao configurar mídias locais:", error);
@@ -138,6 +148,16 @@ async function joinChannel() {
 // Sai do canal
 async function leaveChannel() {
     try {
+        // Desativa o agente AI se estiver ativo
+        if (window.AgentUI && AgentUI.isAgentActive) {
+            // Certifique-se de cancelar qualquer fala em andamento
+            AgentUI.agent.cancelSpeech();
+            // Depois desative o agente completamente
+            AgentUI.toggleAgent();
+            // Garanta que os recursos sejam liberados
+            AgentUI.agent.dispose();
+        }
+        
         // Fecha as tracks locais
         if (localAudioTrack) {
             localAudioTrack.close();
@@ -165,6 +185,12 @@ async function leaveChannel() {
         isVideoMuted = false;
         updateAudioButtonState(false);
         updateVideoButtonState(false);
+        
+        // Atualiza o estado da UI do agente
+        if (window.AgentUI) {
+            AgentUI.updateState('disconnected');
+            AgentUI.clearConversation();
+        }
     } catch (error) {
         console.error("Erro ao sair do canal:", error);
         alert(`Falha ao sair do canal: ${error.message}`);
@@ -185,6 +211,21 @@ function toggleLocalAudio() {
         localAudioTrack.setMuted(true);
         isAudioMuted = true;
         updateAudioButtonState(true);
+    }
+    
+    // Se o agente AI estiver ativo, alterna seu estado para evitar conflitos
+    if (window.AgentUI && AgentUI.isAgentActive) {
+        if (isAudioMuted) {
+            // Se o microfone foi silenciado, pausa a escuta do agente
+            AgentUI.agent.stopListening();
+            AgentUI.statusIndicator.textContent = 'Pausado (microfone silenciado)';
+            AgentUI.statusIndicator.className = 'status-badge initializing';
+        } else {
+            // Se o microfone foi ativado, retoma a escuta do agente
+            AgentUI.agent.startListening();
+            AgentUI.statusIndicator.textContent = 'Ativo - Escutando';
+            AgentUI.statusIndicator.className = 'status-badge active';
+        }
     }
 }
 
@@ -219,6 +260,23 @@ function adjustRemoteUserVolume(uid, volume) {
     const user = remoteUsers[uid];
     if (user && user.audioTrack) {
         user.audioTrack.setVolume(volume);
+    }
+}
+
+// Gerenciamento de erros com feedback específico para o agente AI
+function handleAIError(message, error = null) {
+    console.error(message, error);
+    
+    let errorMessage = message;
+    if (error && error.message) {
+        errorMessage += `: ${error.message}`;
+    }
+    
+    // Exibe o erro no container de conversa do agente
+    if (window.AgentUI) {
+        AgentUI.addSystemMessage(`Erro: ${errorMessage}`);
+    } else {
+        alert(errorMessage);
     }
 }
 

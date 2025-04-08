@@ -1,0 +1,398 @@
+/* Estilos modernos para o Assistente AI, baseado nas imagens de referência */
+
+.agent-container {
+    margin-top: 20px;
+    border-radius: 12px;
+    background-color: white;
+    overflow: hidden;
+}
+
+.agent-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.agent-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 50px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.status-badge.inactive {
+    background-color: #e8e8e8;
+    color: #666;
+}
+
+.status-badge.active {
+    background-color: #dcf8e9;
+    color: #0e773d;
+}
+
+.status-badge.initializing {
+    background-color: #fff7dc;
+    color: #9a6700;
+}
+
+.status-badge.error {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+/* Painel de configuração modal */
+.agent-config {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.agent-config.config-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.agent-config .config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.agent-config .config-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.agent-config .config-close-btn {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.agent-config .config-form {
+    background-color: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    padding: 20px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
+}
+
+.agent-config .config-item {
+    margin-bottom: 16px;
+}
+
+.agent-config .config-item label,
+.agent-config .voice-selection label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #555;
+}
+
+.agent-config .config-item input,
+.agent-config .voice-selection select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.agent-config .config-item input:focus,
+.agent-config .voice-selection select:focus {
+    border-color: #1c87c9;
+    outline: none;
+}
+
+.agent-config .voice-selection {
+    margin-bottom: 20px;
+}
+
+/* Área de conversa */
+.conversation-container {
+    height: 300px;
+    overflow-y: auto;
+    padding: 16px;
+    background-color: #f9f9f9;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.conversation-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.message {
+    display: flex;
+    align-items: flex-start;
+    max-width: 85%;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 14px;
+}
+
+.message.user {
+    background-color: #e7f4fd;
+    align-self: flex-end;
+    margin-left: auto;
+}
+
+.message.assistant {
+    background-color: #f0f0f0;
+    align-self: flex-start;
+}
+
+.message.system {
+    background-color: #f0f0f0;
+    align-self: center;
+    font-size: 13px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.message.error {
+    background-color: #ffebee;
+    color: #c62828;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.message.processing {
+    align-self: center;
+    background: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.user-avatar {
+    background-color: #1c87c9;
+    color: white;
+}
+
+.assistant-avatar {
+    background-color: #3c7abe;
+    color: white;
+}
+
+.message-content {
+    flex: 1;
+    word-break: break-word;
+}
+
+.info-icon, .error-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.info-icon {
+    color: #666;
+}
+
+.error-icon {
+    color: #c62828;
+}
+
+/* Animação de processamento */
+.processing-indicator {
+    display: flex;
+    gap: 4px;
+    margin-right: 8px;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    background-color: #aaa;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+.dot:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.dot:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(0.8);
+        opacity: 0.6;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+/* Controles do agente */
+.agent-controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+}
+
+.primary-button, .secondary-button {
+    padding: 10px 16px;
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    transition: all 0.2s;
+}
+
+.primary-button {
+    background-color: #1c87c9;
+    color: white;
+}
+
+.primary-button:hover {
+    background-color: #166ca0;
+}
+
+.primary-button.active {
+    background-color: #e74c3c;
+}
+
+.primary-button.active:hover {
+    background-color: #c0392b;
+}
+
+.secondary-button {
+    background-color: #f0f0f0;
+    color: #444;
+}
+
+.secondary-button:hover {
+    background-color: #e0e0e0;
+}
+
+.primary-button:disabled, .secondary-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.mic-icon, .settings-icon {
+    width: 18px;
+    height: 18px;
+}
+
+.mic-icon.active {
+    color: #fff;
+}
+
+/* Notificações */
+.notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 1001;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: transform 0.3s, opacity 0.3s;
+}
+
+.notification.info {
+    background-color: #e7f4fd;
+    color: #0d47a1;
+}
+
+.notification.success {
+    background-color: #dcf8e9;
+    color: #0e773d;
+}
+
+.notification.error {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.notification-hide {
+    transform: translateY(30px);
+    opacity: 0;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .agent-config .config-form {
+        width: 95%;
+        padding: 15px;
+    }
+    
+    .conversation-container {
+        height: 250px;
+    }
+    
+    .message {
+        max-width: 90%;
+        padding: 8px 12px;
+    }
+    
+    .agent-controls {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .primary-button, .secondary-button {
+        width: 100%;
+        justify-content: center;
+    }
+}

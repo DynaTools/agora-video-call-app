@@ -1,17 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agora Video Call App</title>
+    <title>Agora Video Call App com Assistente AI</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/agent.css">
     <!-- Carrega o SDK do Agora diretamente de CDN para evitar necessidade de npm -->
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.23.1.js"></script>
+    <!-- Azure Speech SDK -->
+    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Agora Video Call App</h1>
+            <h1>Agora Video Call App com Assistente AI</h1>
         </div>
 
         <div class="control-panel">
@@ -64,9 +67,13 @@
                 <!-- Usuários remotos serão adicionados aqui dinamicamente -->
             </div>
         </div>
+        
+        <!-- O componente do Assistente AI será adicionado aqui via JavaScript -->
     </div>
 
     <script src="js/config.js"></script>
+    <script src="js/agent.js"></script>
+    <script src="js/agent-ui.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/app.js"></script>
 </body>
