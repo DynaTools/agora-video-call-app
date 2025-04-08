@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agora Video Call App</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Carrega o SDK do Agora diretamente de CDN para evitar necessidade de npm -->
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.23.1.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Agora Video Call App</h1>
+        </div>
+
+        <div class="control-panel">
+            <h2>Configurações de Conexão</h2>
+            <div class="controls">
+                <div>
+                    <label for="appId">App ID:</label>
+                    <input type="text" id="appId" placeholder="Digite seu App ID">
+                </div>
+                <div>
+                    <label for="channel">Canal:</label>
+                    <input type="text" id="channel" placeholder="Digite o nome do canal">
+                </div>
+                <div>
+                    <label for="token">Token:</label>
+                    <input type="text" id="token" placeholder="Digite o token (opcional)">
+                </div>
+                <div>
+                    <button id="join">Entrar no Canal</button>
+                    <button id="leave" class="red-btn" disabled>Sair do Canal</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <h2>Controles de Mídia Local</h2>
+            <div class="controls">
+                <div>
+                    <button id="toggleAudio">Silenciar Microfone</button>
+                    <button id="toggleVideo">Desligar Câmera</button>
+                </div>
+                <div class="volume-controls">
+                    <label for="localVolume">Volume do Microfone:</label>
+                    <input type="range" id="localVolume" min="0" max="200" value="100">
+                    <span id="localVolumeValue">100%</span>
+                </div>
+            </div>
+        </div>
+
+        <h2>Transmissões de Vídeo</h2>
+        <div id="videoGrid" class="video-grid">
+            <div id="localVideoContainer" class="video-container" style="display: none;">
+                <div class="user-info">Usuário Local</div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <h2>Usuários Remotos</h2>
+            <div id="remoteUsers" class="user-list">
+                <!-- Usuários remotos serão adicionados aqui dinamicamente -->
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
