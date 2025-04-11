@@ -1,0 +1,5 @@
+Este diretório deve conter o arquivo tutor-avatar.png que representa o avatar do tutor de italiano.
+
+Você pode adicionar uma imagem de avatar aqui ou utilizar uma imagem de placeholder.
+
+Sugestão: busque por "italian teacher avatar" em bancos de imagens gratuitos e salve o arquivo como "tutor-avatar.png" neste diretório.

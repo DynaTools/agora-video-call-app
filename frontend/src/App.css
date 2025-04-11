@@ -1,0 +1,169 @@
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .app-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eaeaea;
+  }
+  
+  .app-header h1 {
+    color: var(--primary-color);
+    margin-bottom: 5px;
+  }
+  
+  .app-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-top: 0;
+  }
+  
+  .app-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--background-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  
+  .app-footer {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+  }
+  
+  /* Loading */
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px;
+  }
+  
+  .loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Error */
+  .error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px;
+    text-align: center;
+  }
+  
+  .error-message {
+    color: var(--error-color);
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+  }
+  
+  .retry-button {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 10px 20px;
+  }
+  
+  /* Welcome Screen */
+  .welcome-container {
+    display: flex;
+    flex: 1;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  
+  .welcome-content {
+    max-width: 700px;
+    text-align: center;
+  }
+  
+  .welcome-content h2 {
+    color: var(--primary-color);
+    margin-bottom: 20px;
+  }
+  
+  .welcome-content p {
+    margin-bottom: 25px;
+    font-size: 1.1rem;
+    line-height: 1.5;
+    color: var(--text-color);
+  }
+  
+  .instructions {
+    text-align: left;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: var(--border-radius);
+    margin-bottom: 30px;
+  }
+  
+  .instructions h3 {
+    color: var(--text-color);
+    margin-top: 0;
+  }
+  
+  .instructions ol {
+    padding-left: 20px;
+  }
+  
+  .instructions li {
+    margin-bottom: 10px;
+  }
+  
+  .start-chat-button {
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 1.1rem;
+    padding: 12px 24px;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .app-container {
+      padding: 10px;
+    }
+    
+    .welcome-content {
+      padding: 15px;
+    }
+    
+    .welcome-content h2 {
+      font-size: 1.5rem;
+    }
+    
+    .welcome-content p {
+      font-size: 1rem;
+    }
+    
+    .instructions {
+      padding: 15px;
+    }
+  }
