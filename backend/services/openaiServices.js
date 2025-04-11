@@ -1,5 +1,9 @@
 const OpenAI = require('openai');
 
+// Debug da variável de ambiente
+console.log("OPENAI_API_KEY encontrada:", process.env.OPENAI_API_KEY ? "Sim" : "Não");
+console.log("Primeiros caracteres (se existirem):", process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 5) + "..." : "N/A");
+
 // Inicializa cliente OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
