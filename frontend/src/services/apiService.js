@@ -68,7 +68,7 @@ export const processChatAudio = async (audioBlob, messageHistory = []) => {
  */
 export const checkServerHealth = async () => {
   try {
-    const response = await apiClient.get('/health');
+    const response = await apiClient.get('/api/health');
     return response.data;
   } catch (error) {
     console.error('Erro ao verificar saúde do servidor:', error);
