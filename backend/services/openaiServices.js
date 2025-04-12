@@ -1,92 +1,111 @@
-import axios from 'axios';
+const OpenAI = require('openai');
+const fs = require('fs');
 
-// Obtenha a URL base do backend
-// Em desenvolvimento local, use http://localhost:5000/api
-// Em GitHub Codespaces, precisamos usar a URL pública fornecida
-const isCodespaces = !!process.env.CODESPACES;
-const port = 5000;
-const baseURL = isCodespaces 
-  ? `https://${process.env.CODESPACE_NAME}-${port}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}/api`
-  : 'http://localhost:5000/api';
-
-console.log('API Base URL:', baseURL); // Adicione este log para depuração
-
-// Cliente Axios com configuração base
-const apiClient = axios.create({
-  baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000, // 30 segundos (processamento de áudio pode demorar)
+// Inicializar cliente OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 /**
- * Obtém um token para o Agora RTC
- * @param {String} channelName - Nome do canal 
- * @param {Number} uid - ID do usuário (opcional)
- * @returns {Promise} Resposta com token e detalhes
+ * Transcreve áudio para texto usando OpenAI Whisper
+ * @param {Buffer} audioBuffer - Buffer do arquivo de áudio
+ * @param {Object} options - Opções de transcrição (ex: idioma)
+ * @returns {Promise<String>} - Texto transcrito
  */
-export const getAgoraToken = async (channelName, uid = 0) => {
+async function transcribeAudio(audioBuffer, options = {}) {
   try {
-    const response = await apiClient.get('/agora-token', {
-      params: { channelName, uid }
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Erro ao obter token Agora:', error);
-    throw error;
-  }
-};
-
-/**
- * Envia áudio para processamento e obtém resposta do tutor
- * @param {Blob} audioBlob - Arquivo de áudio gravado
- * @param {Array} messageHistory - Histórico de mensagens (opcional)
- * @returns {Promise} Resposta com texto e áudio do tutor
- */
-export const processChatAudio = async (audioBlob, messageHistory = []) => {
-  try {
-    // Criar FormData para enviar o arquivo
-    const formData = new FormData();
-    formData.append('audio', audioBlob);
+    // Salvar buffer em arquivo temporário
+    const tempFilePath = `./temp_audio_${Date.now()}.webm`;
+    fs.writeFileSync(tempFilePath, audioBuffer);
     
-    // Adicionar histórico de mensagens se existir
-    if (messageHistory.length > 0) {
-      formData.append('messageHistory', JSON.stringify(messageHistory));
-    }
-
-    // Configuração específica para upload de arquivo
-    const response = await axios.post(`${baseURL}/chat`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      timeout: 60000, // 60 segundos para processamento completo
+    // Criar arquivo para upload
+    const file = fs.createReadStream(tempFilePath);
+    
+    // Chamar API de transcrição
+    const transcription = await openai.audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+      language: options.language || null, // Opcional: 'it' para italiano, 'pt' para português
     });
-
-    return response.data;
+    
+    // Limpar arquivo temporário
+    fs.unlinkSync(tempFilePath);
+    
+    return transcription.text;
   } catch (error) {
-    console.error('Erro ao processar áudio do chat:', error);
-    throw error;
+    console.error('Erro na transcrição:', error);
+    throw new Error(`Falha ao transcrever áudio: ${error.message}`);
   }
-};
+}
 
 /**
- * Verifica a saúde/status do servidor
- * @returns {Promise} Status do servidor
+ * Gera resposta do tutor virtual em italiano
+ * @param {String} userText - Texto do usuário
+ * @param {Array} messageHistory - Histórico de mensagens anteriores
+ * @returns {Promise<String>} - Resposta do tutor
  */
-export const checkServerHealth = async () => {
+async function generateTutorResponse(userText, messageHistory = []) {
   try {
-    const response = await apiClient.get('/health');
-    console.log('Resposta da verificação de saúde:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('Erro ao verificar saúde do servidor:', error);
-    throw error;
-  }
-};
+    // Montar histórico de mensagens para contexto
+    const messages = [
+      {
+        role: 'system',
+        content: `Você é um tutor de italiano amigável e paciente. 
+        Sempre responda em italiano, mesmo que a pergunta seja feita em outro idioma. 
+        Mantenha respostas concisas (máximo 3 frases) e adaptadas ao nível básico/intermediário.
+        Corrija erros gramaticais e de vocabulário de forma gentil.
+        Se apropriado, inclua a tradução de palavras-chave para ajudar no aprendizado.`
+      },
+      // Incluir histórico de conversa anterior para contexto
+      ...messageHistory.map(msg => ({
+        role: msg.sender === 'tutor' ? 'assistant' : 'user',
+        content: msg.text
+      })),
+      // Adicionar mensagem atual do usuário
+      { role: 'user', content: userText }
+    ];
 
-export default {
-  getAgoraToken,
-  processChatAudio,
-  checkServerHealth
+    // Gerar resposta
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages,
+      max_tokens: 200,
+      temperature: 0.7,
+    });
+
+    return completion.choices[0].message.content;
+  } catch (error) {
+    console.error('Erro ao gerar resposta:', error);
+    throw new Error(`Falha ao gerar resposta: ${error.message}`);
+  }
+}
+
+/**
+ * Converte texto para áudio usando TTS da OpenAI
+ * @param {String} text - Texto para conversão
+ * @returns {Promise<Buffer>} - Buffer do áudio gerado
+ */
+async function textToSpeech(text) {
+  try {
+    // Chamar API de TTS
+    const mp3 = await openai.audio.speech.create({
+      model: "tts-1",
+      voice: "alloy",
+      input: text,
+      speed: 0.9, // Um pouco mais lento para melhor compreensão
+    });
+    
+    // Obter buffer de resposta
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    return buffer;
+  } catch (error) {
+    console.error('Erro na síntese de voz:', error);
+    throw new Error(`Falha na síntese de voz: ${error.message}`);
+  }
+}
+
+module.exports = {
+  transcribeAudio,
+  generateTutorResponse,
+  textToSpeech
 };

@@ -5,12 +5,21 @@ import ControlButtons from './ControlButtons';
 import agoraService from '../services/agoraService';
 import { processChatAudio } from '../services/apiService';
 
-// Avatar do tutor (importar imagem)
-import tutorAvatar from '../assets/tutor-avatar.png';
+// Avatar placeholder
+const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><circle cx="50" cy="35" r="25" fill="%234285f4"/><rect x="25" y="65" width="50" height="35" rx="5" fill="%234285f4"/></svg>';
+
+// Avatar do tutor (tente importar, mas use fallback se falhar)
+let tutorAvatar = DEFAULT_AVATAR;
+try {
+  // Tente carregar a imagem diretamente
+  tutorAvatar = require('../assets/tutor-avatar.png');
+} catch (error) {
+  console.warn('Erro ao carregar avatar, usando fallback');
+}
 
 const VideoCall = ({ agoraConfig, onEndCall }) => {
   const localVideoRef = useRef(null);
-  const [isConnected, setIsConnected] = useState(false);
+  // Removed unused isConnected state
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTutorSpeaking, setIsTutorSpeaking] = useState(false);
@@ -210,6 +219,11 @@ const VideoCall = ({ agoraConfig, onEndCall }) => {
               src={tutorAvatar} 
               alt="Tutor de Italiano" 
               className={`tutor-avatar ${isTutorSpeaking ? 'speaking' : ''}`}
+              onError={(e) => {
+                console.log('Erro ao carregar avatar, usando fallback');
+                e.target.onerror = null;
+                e.target.src = DEFAULT_AVATAR;
+              }}
             />
             {chatMessages.length > 0 && chatMessages[chatMessages.length - 1].sender === 'tutor' && (
               <ChatBubble 

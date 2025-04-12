@@ -14,14 +14,23 @@ const PORT = process.env.PORT || 5000;
 // Debug de variáveis de ambiente
 console.log('Ambiente:', process.env.NODE_ENV);
 console.log('Porta:', PORT);
+console.log('CODESPACE_NAME:', process.env.CODESPACE_NAME);
+console.log('GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:', process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN);
 console.log('AGORA_APP_ID presente:', !!process.env.AGORA_APP_ID);
 console.log('OPENAI_API_KEY presente:', !!process.env.OPENAI_API_KEY);
 
-// Configuração do CORS
+// Configuração do CORS para Codespaces
+let corsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
+// Adicionar origin do Codespaces se estiver em ambiente Codespaces
+if (process.env.CODESPACE_NAME && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN) {
+  const codespaceOrigin = `https://${process.env.CODESPACE_NAME}-3000.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`;
+  corsOrigins.push(codespaceOrigin);
+  console.log('Adicionando origin do Codespaces para CORS:', codespaceOrigin);
+}
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? 'seu-dominio-de-producao.com' 
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: corsOrigins,
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -43,7 +52,8 @@ app.get('/api/health', (req, res) => {
     status: 'ok', 
     message: 'Server is running',
     env: process.env.NODE_ENV,
-    port: PORT
+    port: PORT,
+    corsOrigins: corsOrigins
   });
 });
 
@@ -68,4 +78,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`CORS configurado para: ${corsOrigins.join(', ')}`);
 });

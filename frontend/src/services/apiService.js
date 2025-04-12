@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -55,25 +55,10 @@ export const processChatAudio = async (audioBlob, messageHistory = []) => {
   }
 };
 
-<<<<<<< HEAD
-=======
-/**
- * Verifica a saúde/status do servidor
- * @returns {Promise} Status do servidor
- */
-export const checkServerHealth = async () => {
-  try {
-    const response = await apiClient.get('/api/health');
-    return response.data;
-  } catch (error) {
-    console.error('Erro ao verificar saúde do servidor:', error);
-    throw error;
-  }
-};
-
->>>>>>> 0fb27beb00a3973df0f8651407f5666cdbccbfc3
-export default {
+const apiService = {
   getAgoraToken,
   processChatAudio,
   checkServerHealth
 };
+
+export default apiService;

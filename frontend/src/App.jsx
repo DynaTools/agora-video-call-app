@@ -13,8 +13,10 @@ function App() {
   useEffect(() => {
     async function checkServer() {
       try {
+        console.log('Verificando conexão com o servidor...');
         // Verificar se o backend está respondendo
         await checkServerHealth();
+        console.log('Servidor respondeu com sucesso!');
         setIsLoading(false);
       } catch (err) {
         console.error('Erro ao conectar com o servidor:', err);
@@ -29,31 +31,40 @@ function App() {
   // Função para iniciar o chat
   const startChat = async () => {
     try {
+      console.log('Iniciando chat...');
       setIsLoading(true);
       
       // Obter token do Agora
       const channelName = 'tutor_italiano_channel';
+      console.log('Solicitando token Agora para o canal:', channelName);
       const tokenData = await getAgoraToken(channelName);
+      console.log('Token recebido:', tokenData);
+      
+      if (!tokenData || !tokenData.appId || !tokenData.token) {
+        throw new Error('Dados de token incompletos recebidos do servidor');
+      }
       
       // Configurar dados do Agora
       setAgoraConfig({
         appId: tokenData.appId,
-        channel: tokenData.channelName,
+        channel: tokenData.channelName || channelName,
         token: tokenData.token,
-        uid: tokenData.uid
+        uid: tokenData.uid || 0
       });
       
       setIsChatStarted(true);
       setIsLoading(false);
+      console.log('Chat iniciado com sucesso!');
     } catch (err) {
       console.error('Erro ao iniciar chat:', err);
-      setError('Não foi possível iniciar o chat. Por favor, tente novamente.');
+      setError(`Não foi possível iniciar o chat: ${err.message || 'Erro desconhecido'}`);
       setIsLoading(false);
     }
   };
 
   // Função para encerrar o chat
   const endChat = () => {
+    console.log('Encerrando chat...');
     setIsChatStarted(false);
     setAgoraConfig(null);
   };
