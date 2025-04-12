@@ -19,7 +19,7 @@ try {
 
 const VideoCall = ({ agoraConfig, onEndCall }) => {
   const localVideoRef = useRef(null);
-  // Removed unused isConnected state
+  const [isConnected, setIsConnected] = useState(false); // Esta linha estava faltando
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTutorSpeaking, setIsTutorSpeaking] = useState(false);
