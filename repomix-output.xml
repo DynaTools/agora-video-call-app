@@ -1,0 +1,1946 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+.devcontainer/
+  devcontainer.json
+.github/
+  copilot-instructions.md
+backend/
+  routes/
+    agoraToken.js
+    chat.js
+  services/
+    openaiServices.js
+  package.json
+  server.js
+frontend/
+  public/
+    index.html
+  src/
+    assets/
+      placeholder.txt
+    components/
+      ChatBubble.css
+      ChatBubble.jsx
+      ControlButtons.css
+      ControlButtons.jsx
+      VideoCall.css
+      VideoCall.jsx
+    services/
+      agoraService.js
+      apiService.js
+    App.css
+    App.jsx
+    index.css
+    index.js
+    reportWebVitals.js
+  package.json
+.gitignore
+package.json
+README.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".devcontainer/devcontainer.json">
+{
+  "name": "Tutor Italiano IA",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:18",
+  "forwardPorts": [3000, 5000],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-node-azure-pack",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  },
+  "postCreateCommand": "npm install"
+}
+</file>
+
+<file path=".github/copilot-instructions.md">
+- @azure Rule - Use Azure Best Practices: When generating code for Azure, running terminal commands for Azure, or performing operations related to Azure, invoke your `azure_development-get_best_practices` tool if available.
+</file>
+
+<file path="backend/routes/agoraToken.js">
+const express = require('express');
+const router = express.Router();
+const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
+
+/**
+ * @route   GET /api/agora-token
+ * @desc    Gera um token para o Agora RTC
+ * @access  Public (para este demo)
+ */
+router.get('/', (req, res) => {
+  // Obter dados da requisição
+  const channelName = req.query.channelName || process.env.DEFAULT_CHANNEL_NAME || 'default_channel';
+  const uid = parseInt(req.query.uid) || 0; // 0 para uid gerado automaticamente
+  const role = RtcRole.PUBLISHER; // Usuário tem permissão para publicar áudio/vídeo
+  
+  // Token expira em 1 hora (em segundos)
+  const expirationTimeInSeconds = 3600;
+  const currentTimestamp = Math.floor(Date.now() / 1000);
+  const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+  
+  // Verificar se as variáveis de ambiente estão definidas
+  if (!process.env.AGORA_APP_ID || !process.env.AGORA_APP_CERTIFICATE) {
+    return res.status(500).json({ error: 'Credenciais Agora não configuradas no servidor' });
+  }
+
+  try {
+    // Gerar o token
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      process.env.AGORA_APP_ID,
+      process.env.AGORA_APP_CERTIFICATE,
+      channelName,
+      uid,
+      role,
+      privilegeExpiredTs
+    );
+    
+    // Responder com o token e informações adicionais
+    res.json({
+      token,
+      appId: process.env.AGORA_APP_ID,
+      channelName,
+      uid,
+      expiresIn: expirationTimeInSeconds
+    });
+    
+    console.log(`Token gerado para o canal ${channelName}, uid ${uid}`);
+  } catch (error) {
+    console.error('Erro ao gerar token:', error);
+    res.status(500).json({ error: 'Falha ao gerar token', details: error.message });
+  }
+});
+
+module.exports = router;
+</file>
+
+<file path="backend/routes/chat.js">
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const { transcribeAudio, generateTutorResponse, textToSpeech } = require('../services/openaiServices');
+
+// Configuração do multer para processar uploads de áudio
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // Limite de 10MB
+});
+
+/**
+ * @route   POST /api/chat
+ * @desc    Processa áudio do usuário e retorna resposta do tutor
+ * @access  Public (para este demo)
+ */
+router.post('/', upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo de áudio fornecido' });
+    }
+
+    // 1. Transcrição de fala para texto
+    console.log('Iniciando transcrição do áudio...');
+    const audioBuffer = req.file.buffer;
+    const userText = await transcribeAudio(audioBuffer, {
+      language: req.body.language // Opcional, o usuário pode fornecer o idioma
+    });
+    console.log('Texto transcrito:', userText);
+
+    // 2. Geração de resposta em italiano pelo modelo GPT
+    console.log('Gerando resposta do tutor...');
+    // Opcionalmente, podemos receber histórico de conversa do cliente
+    const messageHistory = req.body.messageHistory ? JSON.parse(req.body.messageHistory) : [];
+    const tutorResponse = await generateTutorResponse(userText, messageHistory);
+    console.log('Resposta gerada:', tutorResponse);
+
+    // 3. Síntese de voz (texto para fala)
+    console.log('Convertendo texto em áudio...');
+    const audioResponseBuffer = await textToSpeech(tutorResponse);
+
+    // 4. Enviar resposta ao cliente
+    const response = {
+      userText: userText,        // O que o usuário disse (transcrito)
+      tutorText: tutorResponse,  // Resposta do tutor em texto
+      // Convertendo buffer para base64 para enviar no JSON
+      tutorAudio: audioResponseBuffer.toString('base64')
+    };
+
+    res.json(response);
+    console.log('Resposta enviada com sucesso');
+  } catch (error) {
+    console.error('Erro ao processar chat:', error);
+    res.status(500).json({ 
+      error: 'Falha ao processar a mensagem',
+      message: error.message 
+    });
+  }
+});
+
+module.exports = router;
+</file>
+
+<file path="backend/package.json">
+{
+    "name": "tutor-italiano-ia-backend",
+    "version": "1.0.0",
+    "description": "Backend para o aplicativo de tutor IA de italiano",
+    "main": "server.js",
+    "scripts": {
+      "start": "node server.js",
+      "dev": "nodemon server.js",
+      "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "dependencies": {
+      "agora-access-token": "^2.0.4",
+      "cors": "^2.8.5",
+      "dotenv": "^16.3.1",
+      "express": "^4.18.2",
+      "morgan": "^1.10.0",
+      "multer": "^1.4.5-lts.1",
+      "openai": "^4.14.0"
+    },
+    "devDependencies": {
+      "nodemon": "^3.0.1"
+    }
+  }
+</file>
+
+<file path="frontend/public/index.html">
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Tutor virtual de italiano com videochamada e IA"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <title>Tutor Italiano IA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <noscript>Você precisa habilitar JavaScript para executar este aplicativo.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+</file>
+
+<file path="frontend/src/assets/placeholder.txt">
+Este diretório deve conter o arquivo tutor-avatar.png que representa o avatar do tutor de italiano.
+
+Você pode adicionar uma imagem de avatar aqui ou utilizar uma imagem de placeholder.
+
+Sugestão: busque por "italian teacher avatar" em bancos de imagens gratuitos e salve o arquivo como "tutor-avatar.png" neste diretório.
+</file>
+
+<file path="frontend/src/components/ChatBubble.css">
+.chat-bubble {
+    margin-bottom: 10px;
+    max-width: 80%;
+    animation: fadeIn 0.3s ease;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .tutor-bubble {
+    align-self: flex-start;
+  }
+  
+  .user-bubble {
+    align-self: flex-end;
+  }
+  
+  .bubble-content {
+    padding: 10px 15px;
+    border-radius: 18px;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+  
+  .tutor-bubble .bubble-content {
+    background-color: #e3f2fd;
+    border-bottom-left-radius: 4px;
+  }
+  
+  .user-bubble .bubble-content {
+    background-color: #e8f5e9;
+    border-bottom-right-radius: 4px;
+  }
+  
+  .bubble-text {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  
+  .bubble-time {
+    display: block;
+    font-size: 0.7rem;
+    opacity: 0.7;
+    margin-top: 5px;
+    text-align: right;
+  }
+  
+  @media (max-width: 768px) {
+    .chat-bubble {
+      max-width: 90%;
+    }
+    
+    .bubble-content {
+      padding: 8px 12px;
+    }
+    
+    .bubble-text {
+      font-size: 0.9rem;
+    }
+  }
+</file>
+
+<file path="frontend/src/components/ChatBubble.jsx">
+import React from 'react';
+import './ChatBubble.css';
+
+const ChatBubble = ({ message, type }) => {
+  const { text, timestamp } = message;
+  
+  // Formatar hora da mensagem
+  const formatTime = (date) => {
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  
+  return (
+    <div className={`chat-bubble ${type}-bubble`}>
+      <div className="bubble-content">
+        <p className="bubble-text">{text}</p>
+        <span className="bubble-time">{formatTime(timestamp)}</span>
+      </div>
+    </div>
+  );
+};
+
+export default ChatBubble;
+</file>
+
+<file path="frontend/src/components/ControlButtons.css">
+.control-buttons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background-color: #fafafa;
+    border-top: 1px solid #eaeaea;
+  }
+  
+  .mic-button, .end-call-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50px;
+    padding: 12px 20px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  .mic-button {
+    background-color: white;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    min-width: 200px;
+  }
+  
+  .mic-button span {
+    margin-left: 10px;
+  }
+  
+  .mic-button:hover:not(:disabled) {
+    background-color: #f0f7ff;
+  }
+  
+  .mic-button.recording {
+    background-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 0 0 5px rgba(26, 115, 232, 0.2);
+  }
+  
+  .mic-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  .end-call-button {
+    background-color: var(--error-color);
+    color: white;
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    transform: rotate(135deg);
+  }
+  
+  .end-call-button:hover {
+    background-color: #d32f2f;
+  }
+  
+  .loading-icon {
+    animation: rotate 1s linear infinite;
+  }
+  
+  @keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
+  @media (max-width: 768px) {
+    .control-buttons {
+      padding: 15px 10px;
+      gap: 15px;
+    }
+    
+    .mic-button {
+      min-width: 160px;
+      font-size: 0.9rem;
+      padding: 10px 15px;
+    }
+    
+    .end-call-button {
+      width: 45px;
+      height: 45px;
+    }
+  }
+</file>
+
+<file path="frontend/src/components/ControlButtons.jsx">
+import React from 'react';
+import './ControlButtons.css';
+import { FaMicrophone, FaMicrophoneSlash, FaPhone, FaSpinner } from 'react-icons/fa';
+
+const ControlButtons = ({ 
+  isRecording, 
+  isLoading, 
+  isTutorSpeaking,
+  onStartRecording, 
+  onStopRecording, 
+  onEndCall 
+}) => {
+  // Handler para o botão de microfone
+  const handleMicButton = () => {
+    if (isRecording) {
+      onStopRecording();
+    } else {
+      onStartRecording();
+    }
+  };
+
+  return (
+    <div className="control-buttons">
+      <button 
+        className={`mic-button ${isRecording ? 'recording' : ''}`}
+        onClick={handleMicButton}
+        disabled={isLoading || isTutorSpeaking}
+        title={isRecording ? 'Soltar para parar de falar' : 'Pressionar para falar'}
+      >
+        {isLoading ? (
+          <FaSpinner className="loading-icon" />
+        ) : isRecording ? (
+          <FaMicrophoneSlash />
+        ) : (
+          <FaMicrophone />
+        )}
+        <span>
+          {isLoading 
+            ? 'Processando...' 
+            : isRecording 
+              ? 'Solte para parar' 
+              : 'Pressione para falar'}
+        </span>
+      </button>
+
+      <button 
+        className="end-call-button"
+        onClick={onEndCall}
+        title="Encerrar chamada"
+      >
+        <FaPhone />
+      </button>
+    </div>
+  );
+};
+
+export default ControlButtons;
+</file>
+
+<file path="frontend/src/components/VideoCall.css">
+.video-call-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  /* Área de vídeo */
+  .video-area {
+    display: flex;
+    flex: 1;
+    min-height: 400px;
+    border-bottom: 1px solid #eaeaea;
+  }
+  
+  .tutor-side {
+    flex: 2;
+    background-color: #f6f8fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 20px;
+  }
+  
+  .user-side {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    background-color: #fafafa;
+  }
+  
+  /* Avatar do tutor */
+  .tutor-avatar-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .tutor-avatar {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #fff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+  
+  .tutor-avatar.speaking {
+    box-shadow: 0 0 0 4px var(--primary-color), 0 4px 8px rgba(0, 0, 0, 0.2);
+    transform: scale(1.05);
+  }
+  
+  /* Vídeo local */
+  .local-video-container {
+    width: 100%;
+    height: 180px;
+    background-color: #333;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    position: relative;
+  }
+  
+  /* Histórico de chat */
+  .chat-history {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: #ffffff;
+  }
+  
+  /* Loading overlay */
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+  }
+  
+  .loading-overlay .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Media queries */
+  @media (max-width: 768px) {
+    .video-area {
+      flex-direction: column;
+      min-height: 350px;
+    }
+    
+    .tutor-side, .user-side {
+      flex: 1;
+    }
+    
+    .local-video-container {
+      height: 120px;
+    }
+    
+    .tutor-avatar {
+      width: 100px;
+      height: 100px;
+    }
+    
+    .chat-history {
+      max-height: 150px;
+      padding: 10px;
+    }
+  }
+</file>
+
+<file path="frontend/src/components/VideoCall.jsx">
+import React, { useState, useEffect, useRef } from 'react';
+import './VideoCall.css';
+import ChatBubble from './ChatBubble';
+import ControlButtons from './ControlButtons';
+import agoraService from '../services/agoraService';
+import { processChatAudio } from '../services/apiService';
+
+// Avatar do tutor (importar imagem)
+import tutorAvatar from '../assets/tutor-avatar.png';
+
+const VideoCall = ({ agoraConfig, onEndCall }) => {
+  const localVideoRef = useRef(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTutorSpeaking, setIsTutorSpeaking] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [audioRecorder, setAudioRecorder] = useState(null);
+  const [audioChunks, setAudioChunks] = useState([]);
+  const audioPlayerRef = useRef(null);
+
+  // Efeito para inicializar a chamada quando o componente é montado
+  useEffect(() => {
+    const initCall = async () => {
+      try {
+        setIsLoading(true);
+        // Inicializar Agora SDK
+        const { appId, channel, token, uid } = agoraConfig;
+        await agoraService.join(appId, channel, token, uid);
+        
+        // Exibir vídeo local
+        const { videoTrack } = agoraService.getLocalTracks();
+        if (videoTrack && localVideoRef.current) {
+          videoTrack.play(localVideoRef.current);
+        }
+        
+        setIsConnected(true);
+        setIsLoading(false);
+        
+        // Adicionar mensagem inicial do tutor
+        setChatMessages([
+          {
+            sender: 'tutor',
+            text: 'Ciao! Sono il tuo tutor di italiano. Come posso aiutarti oggi?',
+            timestamp: new Date()
+          }
+        ]);
+        
+        // Reproduzir mensagem inicial
+        const welcomeMessage = new SpeechSynthesisUtterance('Ciao! Sono il tuo tutor di italiano. Come posso aiutarti oggi?');
+        welcomeMessage.lang = 'it-IT';
+        speechSynthesis.speak(welcomeMessage);
+      } catch (error) {
+        console.error('Erro ao iniciar videochamada:', error);
+        setIsLoading(false);
+      }
+    };
+    
+    if (agoraConfig) {
+      initCall();
+    }
+    
+    // Cleanup ao desmontar o componente
+    return () => {
+      agoraService.leave();
+      if (audioRecorder) {
+        audioRecorder.stop();
+      }
+    };
+  }, [agoraConfig]);
+
+  // Inicializar gravador de áudio
+  useEffect(() => {
+    const initAudioRecorder = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            setAudioChunks((chunks) => [...chunks, event.data]);
+          }
+        };
+        
+        mediaRecorder.onstop = handleAudioRecordingStopped;
+        
+        setAudioRecorder(mediaRecorder);
+      } catch (error) {
+        console.error('Erro ao inicializar gravador de áudio:', error);
+      }
+    };
+    
+    initAudioRecorder();
+  }, []);
+
+  // Processar a gravação de áudio quando parada
+  const handleAudioRecordingStopped = async () => {
+    if (audioChunks.length === 0) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Criar blob de áudio a partir dos chunks
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      
+      // Adicionar mensagem do usuário (inicialmente vazia até recebermos a transcrição)
+      const userMessageIndex = chatMessages.length;
+      setChatMessages(prev => [
+        ...prev, 
+        { 
+          sender: 'user', 
+          text: '...', // Será atualizado com a transcrição
+          timestamp: new Date() 
+        }
+      ]);
+      
+      // Enviar áudio para processamento
+      const response = await processChatAudio(audioBlob);
+      
+      // Atualizar mensagem do usuário com a transcrição
+      setChatMessages(prev => {
+        const updated = [...prev];
+        updated[userMessageIndex] = {
+          ...updated[userMessageIndex],
+          text: response.userText
+        };
+        return updated;
+      });
+      
+      // Adicionar resposta do tutor
+      setChatMessages(prev => [
+        ...prev,
+        {
+          sender: 'tutor',
+          text: response.tutorText,
+          timestamp: new Date()
+        }
+      ]);
+      
+      // Reproduzir áudio da resposta
+      const audioBase64 = response.tutorAudio;
+      const audioData = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+      const audioResponse = new Blob([audioData], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioResponse);
+      
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.src = audioUrl;
+        audioPlayerRef.current.onplay = () => setIsTutorSpeaking(true);
+        audioPlayerRef.current.onended = () => {
+          setIsTutorSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
+        };
+        audioPlayerRef.current.play();
+      }
+      
+      // Limpar chunks de áudio para próxima gravação
+      setAudioChunks([]);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Erro ao processar áudio:', error);
+      setIsLoading(false);
+      
+      // Adicionar mensagem de erro do tutor
+      setChatMessages(prev => [
+        ...prev,
+        {
+          sender: 'tutor',
+          text: 'Mi dispiace, c\'è stato un problema. Puoi riprovare?',
+          timestamp: new Date()
+        }
+      ]);
+    }
+  };
+
+  // Iniciar gravação de áudio
+  const startRecording = () => {
+    if (audioRecorder && !isRecording && !isLoading) {
+      setAudioChunks([]);
+      audioRecorder.start();
+      setIsRecording(true);
+    }
+  };
+
+  // Parar gravação de áudio
+  const stopRecording = () => {
+    if (audioRecorder && isRecording) {
+      audioRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  // Encerrar a chamada
+  const handleEndCall = () => {
+    agoraService.leave();
+    if (onEndCall) onEndCall();
+  };
+
+  return (
+    <div className="video-call-container">
+      {isLoading && (
+        <div className="loading-overlay">
+          <div className="loading-spinner"></div>
+        </div>
+      )}
+      
+      <div className="video-area">
+        <div className="tutor-side">
+          <div className="tutor-avatar-container">
+            <img 
+              src={tutorAvatar} 
+              alt="Tutor de Italiano" 
+              className={`tutor-avatar ${isTutorSpeaking ? 'speaking' : ''}`}
+            />
+            {chatMessages.length > 0 && chatMessages[chatMessages.length - 1].sender === 'tutor' && (
+              <ChatBubble 
+                message={chatMessages[chatMessages.length - 1]} 
+                type="tutor"
+              />
+            )}
+          </div>
+        </div>
+        
+        <div className="user-side">
+          <div className="local-video-container" ref={localVideoRef}></div>
+          {chatMessages.length > 0 && 
+           chatMessages[chatMessages.length - 1].sender === 'user' && 
+           chatMessages[chatMessages.length - 1].text !== '...' && (
+            <ChatBubble 
+              message={chatMessages[chatMessages.length - 1]} 
+              type="user"
+            />
+          )}
+        </div>
+      </div>
+      
+      <div className="chat-history">
+        {chatMessages.map((msg, index) => (
+          <ChatBubble key={index} message={msg} type={msg.sender} />
+        ))}
+      </div>
+      
+      <ControlButtons 
+        isRecording={isRecording}
+        isLoading={isLoading}
+        isTutorSpeaking={isTutorSpeaking}
+        onStartRecording={startRecording}
+        onStopRecording={stopRecording}
+        onEndCall={handleEndCall}
+      />
+      
+      <audio ref={audioPlayerRef} style={{ display: 'none' }}></audio>
+    </div>
+  );
+};
+
+export default VideoCall;
+</file>
+
+<file path="frontend/src/services/agoraService.js">
+import AgoraRTC from 'agora-rtc-sdk-ng';
+
+// Configurar cliente Agora
+AgoraRTC.setLogLevel(process.env.NODE_ENV === 'production' ? 4 : 0);
+
+/**
+ * Classe para gerenciar conexão Agora
+ */
+class AgoraService {
+  constructor() {
+    this.client = null;
+    this.localAudioTrack = null;
+    this.localVideoTrack = null;
+    this.isJoined = false;
+    this.onRemoteUserJoined = null;
+    this.onRemoteUserLeft = null;
+  }
+
+  /**
+   * Inicializa o cliente Agora
+   */
+  init() {
+    this.client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+    this._registerEventHandlers();
+    console.log('Cliente Agora inicializado');
+  }
+
+  /**
+   * Registra handlers de eventos
+   */
+  _registerEventHandlers() {
+    // Quando um usuário remoto entra no canal
+    this.client.on('user-published', async (user, mediaType) => {
+      await this.client.subscribe(user, mediaType);
+      console.log('Inscrito no usuário remoto:', user.uid);
+      
+      if (mediaType === 'video' && this.onRemoteUserJoined) {
+        this.onRemoteUserJoined(user);
+      }
+      
+      if (mediaType === 'audio') {
+        user.audioTrack.play();
+      }
+    });
+
+    // Quando um usuário remoto sai do canal
+    this.client.on('user-left', (user) => {
+      console.log('Usuário remoto saiu:', user.uid);
+      if (this.onRemoteUserLeft) {
+        this.onRemoteUserLeft(user);
+      }
+    });
+  }
+
+  /**
+   * Entra em um canal Agora
+   * @param {String} appId - App ID da Agora
+   * @param {String} channel - Nome do canal 
+   * @param {String} token - Token gerado pelo servidor
+   * @param {Number|String} uid - ID do usuário (opcional)
+   */
+  async join(appId, channel, token, uid = null) {
+    if (!this.client) this.init();
+    
+    try {
+      // Entrar no canal
+      await this.client.join(appId, channel, token, uid);
+      console.log('Entrou no canal com sucesso:', channel);
+      this.isJoined = true;
+      
+      // Criar e publicar tracks de áudio e vídeo locais
+      [this.localAudioTrack, this.localVideoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
+      
+      // Publicar tracks locais
+      await this.client.publish([this.localAudioTrack, this.localVideoTrack]);
+      console.log('Tracks locais publicados');
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao entrar no canal:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sai do canal atual
+   */
+  async leave() {
+    if (!this.isJoined) return;
+    
+    // Liberar recursos de áudio e vídeo locais
+    if (this.localAudioTrack) {
+      this.localAudioTrack.close();
+      this.localAudioTrack = null;
+    }
+    
+    if (this.localVideoTrack) {
+      this.localVideoTrack.close();
+      this.localVideoTrack = null;
+    }
+    
+    // Sair do canal
+    await this.client.leave();
+    console.log('Saiu do canal');
+    this.isJoined = false;
+  }
+
+  /**
+   * Ativa/desativa o áudio local
+   * @param {Boolean} enabled - Se o áudio deve estar ativo
+   */
+  toggleMicrophone(enabled) {
+    if (this.localAudioTrack) {
+      this.localAudioTrack.setEnabled(enabled);
+      return enabled;
+    }
+    return false;
+  }
+
+  /**
+   * Ativa/desativa o vídeo local
+   * @param {Boolean} enabled - Se o vídeo deve estar ativo
+   */
+  toggleCamera(enabled) {
+    if (this.localVideoTrack) {
+      this.localVideoTrack.setEnabled(enabled);
+      return enabled;
+    }
+    return false;
+  }
+
+  /**
+   * Retorna os tracks locais (áudio e vídeo)
+   */
+  getLocalTracks() {
+    return {
+      audioTrack: this.localAudioTrack,
+      videoTrack: this.localVideoTrack
+    };
+  }
+
+  /**
+   * Define callbacks para eventos de usuários remotos
+   * @param {Function} onJoined - Callback quando um usuário entra
+   * @param {Function} onLeft - Callback quando um usuário sai
+   */
+  setRemoteUserCallbacks(onJoined, onLeft) {
+    this.onRemoteUserJoined = onJoined;
+    this.onRemoteUserLeft = onLeft;
+  }
+}
+
+// Exportar uma instância única
+const agoraService = new AgoraService();
+export default agoraService;
+</file>
+
+<file path="frontend/src/App.css">
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .app-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eaeaea;
+  }
+  
+  .app-header h1 {
+    color: var(--primary-color);
+    margin-bottom: 5px;
+  }
+  
+  .app-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-top: 0;
+  }
+  
+  .app-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--background-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  
+  .app-footer {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+  }
+  
+  /* Loading */
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px;
+  }
+  
+  .loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Error */
+  .error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px;
+    text-align: center;
+  }
+  
+  .error-message {
+    color: var(--error-color);
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+  }
+  
+  .retry-button {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 10px 20px;
+  }
+  
+  /* Welcome Screen */
+  .welcome-container {
+    display: flex;
+    flex: 1;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  
+  .welcome-content {
+    max-width: 700px;
+    text-align: center;
+  }
+  
+  .welcome-content h2 {
+    color: var(--primary-color);
+    margin-bottom: 20px;
+  }
+  
+  .welcome-content p {
+    margin-bottom: 25px;
+    font-size: 1.1rem;
+    line-height: 1.5;
+    color: var(--text-color);
+  }
+  
+  .instructions {
+    text-align: left;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: var(--border-radius);
+    margin-bottom: 30px;
+  }
+  
+  .instructions h3 {
+    color: var(--text-color);
+    margin-top: 0;
+  }
+  
+  .instructions ol {
+    padding-left: 20px;
+  }
+  
+  .instructions li {
+    margin-bottom: 10px;
+  }
+  
+  .start-chat-button {
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 1.1rem;
+    padding: 12px 24px;
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .app-container {
+      padding: 10px;
+    }
+    
+    .welcome-content {
+      padding: 15px;
+    }
+    
+    .welcome-content h2 {
+      font-size: 1.5rem;
+    }
+    
+    .welcome-content p {
+      font-size: 1rem;
+    }
+    
+    .instructions {
+      padding: 15px;
+    }
+  }
+</file>
+
+<file path="frontend/src/App.jsx">
+import React, { useState, useEffect } from 'react';
+import './App.css';
+import VideoCall from './components/VideoCall';
+import { getAgoraToken, checkServerHealth } from './services/apiService';
+
+function App() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [agoraConfig, setAgoraConfig] = useState(null);
+  const [isChatStarted, setIsChatStarted] = useState(false);
+
+  // Ao iniciar o aplicativo, verificar se o servidor está ativo
+  useEffect(() => {
+    async function checkServer() {
+      try {
+        // Verificar se o backend está respondendo
+        await checkServerHealth();
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Erro ao conectar com o servidor:', err);
+        setError('Não foi possível conectar ao servidor. Por favor, tente novamente mais tarde.');
+        setIsLoading(false);
+      }
+    }
+
+    checkServer();
+  }, []);
+
+  // Função para iniciar o chat
+  const startChat = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Obter token do Agora
+      const channelName = 'tutor_italiano_channel';
+      const tokenData = await getAgoraToken(channelName);
+      
+      // Configurar dados do Agora
+      setAgoraConfig({
+        appId: tokenData.appId,
+        channel: tokenData.channelName,
+        token: tokenData.token,
+        uid: tokenData.uid
+      });
+      
+      setIsChatStarted(true);
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Erro ao iniciar chat:', err);
+      setError('Não foi possível iniciar o chat. Por favor, tente novamente.');
+      setIsLoading(false);
+    }
+  };
+
+  // Função para encerrar o chat
+  const endChat = () => {
+    setIsChatStarted(false);
+    setAgoraConfig(null);
+  };
+
+  return (
+    <div className="app-container">
+      <header className="app-header">
+        <h1>Tutor Italiano IA</h1>
+        <p className="app-subtitle">Pratique italiano com um tutor virtual inteligente</p>
+      </header>
+
+      <main className="app-main">
+        {isLoading ? (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>Carregando...</p>
+          </div>
+        ) : error ? (
+          <div className="error-container">
+            <p className="error-message">{error}</p>
+            <button 
+              className="retry-button"
+              onClick={() => window.location.reload()}
+            >
+              Tentar Novamente
+            </button>
+          </div>
+        ) : !isChatStarted ? (
+          <div className="welcome-container">
+            <div className="welcome-content">
+              <h2>Bem-vindo ao Tutor Italiano IA</h2>
+              <p>
+                Converse em tempo real com um tutor virtual que sempre responde em italiano,
+                mesmo quando você fala em português ou outro idioma.
+                <br /><br />
+                Perfeito para praticar sua compreensão e pronúncia em italiano!
+              </p>
+              <div className="instructions">
+                <h3>Como funciona:</h3>
+                <ol>
+                  <li>Clique em "Iniciar Conversa" para começar.</li>
+                  <li>Permita acesso à sua câmera e microfone quando solicitado.</li>
+                  <li>Fale em qualquer idioma e o tutor sempre responderá em italiano.</li>
+                  <li>Pressione o botão de microfone para falar com o tutor.</li>
+                </ol>
+              </div>
+              <button 
+                className="start-chat-button"
+                onClick={startChat}
+              >
+                Iniciar Conversa
+              </button>
+            </div>
+          </div>
+        ) : (
+          <VideoCall
+            agoraConfig={agoraConfig}
+            onEndCall={endChat}
+          />
+        )}
+      </main>
+
+      <footer className="app-footer">
+        <p>Desenvolvido com tecnologia Agora.io e OpenAI</p>
+      </footer>
+    </div>
+  );
+}
+
+export default App;
+</file>
+
+<file path="frontend/src/index.css">
+body {
+    margin: 0;
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #f5f5f5;
+  }
+  
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+      monospace;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+  
+  /* Variáveis CSS globais */
+  :root {
+    --primary-color: #1a73e8;
+    --secondary-color: #34a853;
+    --accent-color: #ff5722;
+    --text-color: #212121;
+    --text-secondary: #757575;
+    --background-color: #ffffff;
+    --error-color: #f44336;
+    --success-color: #4caf50;
+    --border-radius: 8px;
+    --shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    --transition: all 0.3s ease;
+  }
+  
+  /* Estilo básico para botões */
+  button {
+    cursor: pointer;
+    border: none;
+    padding: 10px 15px;
+    border-radius: var(--border-radius);
+    transition: var(--transition);
+    font-weight: 500;
+    outline: none;
+  }
+  
+  button:hover {
+    opacity: 0.9;
+  }
+  
+  button:active {
+    transform: scale(0.98);
+  }
+  
+  /* Estilos responsivos */
+  @media (max-width: 768px) {
+    :root {
+      --border-radius: 6px;
+    }
+  }
+</file>
+
+<file path="frontend/src/index.js">
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+</file>
+
+<file path="frontend/src/reportWebVitals.js">
+const reportWebVitals = onPerfEntry => {
+    if (onPerfEntry && onPerfEntry instanceof Function) {
+      import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+        getCLS(onPerfEntry);
+        getFID(onPerfEntry);
+        getFCP(onPerfEntry);
+        getLCP(onPerfEntry);
+        getTTFB(onPerfEntry);
+      });
+    }
+  };
+  
+  export default reportWebVitals;
+</file>
+
+<file path="frontend/package.json">
+{
+    "name": "tutor-italiano-ia-frontend",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {
+      "@testing-library/jest-dom": "^5.16.5",
+      "@testing-library/react": "^13.4.0",
+      "@testing-library/user-event": "^13.5.0",
+      "agora-rtc-react": "^1.1.3",
+      "agora-rtc-sdk-ng": "^4.17.2",
+      "axios": "^1.5.1",
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0",
+      "react-icons": "^4.11.0",
+      "react-scripts": "5.0.1",
+      "web-vitals": "^2.1.4"
+    },
+    "scripts": {
+      "start": "react-scripts start",
+      "build": "react-scripts build",
+      "test": "react-scripts test",
+      "eject": "react-scripts eject"
+    },
+    "eslintConfig": {
+      "extends": [
+        "react-app",
+        "react-app/jest"
+      ]
+    },
+    "browserslist": {
+      "production": [
+        ">0.2%",
+        "not dead",
+        "not op_mini all"
+      ],
+      "development": [
+        "last 1 chrome version",
+        "last 1 firefox version",
+        "last 1 safari version"
+      ]
+    },
+    "proxy": "http://localhost:5000"
+  }
+</file>
+
+<file path=".gitignore">
+# Dependências
+node_modules/
+/frontend/node_modules/
+/backend/node_modules/
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Build
+build/
+dist/
+/frontend/build/
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+</file>
+
+<file path="backend/server.js">
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const path = require('path');
+
+// Importação das rotas
+const agoraTokenRoutes = require('./routes/agoraToken');
+const chatRoutes = require('./routes/chat');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Debug de variáveis de ambiente
+console.log('Ambiente:', process.env.NODE_ENV);
+console.log('Porta:', PORT);
+console.log('AGORA_APP_ID presente:', !!process.env.AGORA_APP_ID);
+console.log('OPENAI_API_KEY presente:', !!process.env.OPENAI_API_KEY);
+
+// Configuração do CORS
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? 'seu-dominio-de-producao.com' 
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+// Middleware
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use(morgan('dev'));
+
+// Rotas da API
+app.use('/api/agora-token', agoraTokenRoutes);
+app.use('/api/chat', chatRoutes);
+
+// Verificação de saúde do servidor
+app.get('/api/health', (req, res) => {
+  console.log('Health check solicitado');
+  res.status(200).json({ 
+    status: 'ok', 
+    message: 'Server is running',
+    env: process.env.NODE_ENV,
+    port: PORT
+  });
+});
+
+// Servindo arquivos estáticos em produção
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+}
+
+// Middleware de tratamento de erros
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    error: 'Erro interno do servidor',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Algo deu errado'
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+});
+</file>
+
+<file path="frontend/src/services/apiService.js">
+import axios from 'axios';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 30000,
+});
+
+export const checkServerHealth = async () => {
+  try {
+    const response = await apiClient.get('/health');
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao verificar saúde do servidor:', error);
+    throw error;
+  }
+};
+
+export const getAgoraToken = async (channelName, uid = 0) => {
+  try {
+    const response = await apiClient.get('/agora-token', {
+      params: { channelName, uid }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao obter token Agora:', error);
+    throw error;
+  }
+};
+
+export const processChatAudio = async (audioBlob, messageHistory = []) => {
+  try {
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
+    
+    if (messageHistory.length > 0) {
+      formData.append('messageHistory', JSON.stringify(messageHistory));
+    }
+
+    const response = await axios.post(`${API_BASE_URL}/chat`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 60000,
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao processar áudio do chat:', error);
+    throw error;
+  }
+};
+
+export default {
+  getAgoraToken,
+  processChatAudio,
+  checkServerHealth
+};
+</file>
+
+<file path="package.json">
+{
+  "name": "tutor-italiano-ia",
+  "version": "1.0.0",
+  "description": "Aplicativo web de videochamada com tutor IA de italiano",
+  "main": "index.js",
+  "scripts": {
+    "install-all": "npm install && cd frontend && npm install && cd ../backend && npm install",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:frontend": "cd frontend && npm start",
+    "start:backend": "cd backend && npm run dev",
+    "build": "cd frontend && npm run build"
+  },
+  "keywords": [
+    "agora",
+    "openai",
+    "videochamada",
+    "italiano",
+    "tutor",
+    "ia"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
+</file>
+
+<file path="backend/services/openaiServices.js">
+import axios from 'axios';
+
+// Obtenha a URL base do backend
+// Em desenvolvimento local, use http://localhost:5000/api
+// Em GitHub Codespaces, precisamos usar a URL pública fornecida
+const isCodespaces = !!process.env.CODESPACES;
+const port = 5000;
+const baseURL = isCodespaces 
+  ? `https://${process.env.CODESPACE_NAME}-${port}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}/api`
+  : 'http://localhost:5000/api';
+
+console.log('API Base URL:', baseURL); // Adicione este log para depuração
+
+// Cliente Axios com configuração base
+const apiClient = axios.create({
+  baseURL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 30000, // 30 segundos (processamento de áudio pode demorar)
+});
+
+/**
+ * Obtém um token para o Agora RTC
+ * @param {String} channelName - Nome do canal 
+ * @param {Number} uid - ID do usuário (opcional)
+ * @returns {Promise} Resposta com token e detalhes
+ */
+export const getAgoraToken = async (channelName, uid = 0) => {
+  try {
+    const response = await apiClient.get('/agora-token', {
+      params: { channelName, uid }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao obter token Agora:', error);
+    throw error;
+  }
+};
+
+/**
+ * Envia áudio para processamento e obtém resposta do tutor
+ * @param {Blob} audioBlob - Arquivo de áudio gravado
+ * @param {Array} messageHistory - Histórico de mensagens (opcional)
+ * @returns {Promise} Resposta com texto e áudio do tutor
+ */
+export const processChatAudio = async (audioBlob, messageHistory = []) => {
+  try {
+    // Criar FormData para enviar o arquivo
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
+    
+    // Adicionar histórico de mensagens se existir
+    if (messageHistory.length > 0) {
+      formData.append('messageHistory', JSON.stringify(messageHistory));
+    }
+
+    // Configuração específica para upload de arquivo
+    const response = await axios.post(`${baseURL}/chat`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 60000, // 60 segundos para processamento completo
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao processar áudio do chat:', error);
+    throw error;
+  }
+};
+
+/**
+ * Verifica a saúde/status do servidor
+ * @returns {Promise} Status do servidor
+ */
+export const checkServerHealth = async () => {
+  try {
+    const response = await apiClient.get('/health');
+    console.log('Resposta da verificação de saúde:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao verificar saúde do servidor:', error);
+    throw error;
+  }
+};
+
+export default {
+  getAgoraToken,
+  processChatAudio,
+  checkServerHealth
+};
+</file>
+
+<file path="README.md">
+# Tutor Italiano IA
+
+Aplicativo web de videochamada com tutor IA de italiano que integra chamadas de vídeo em tempo real via Agora SDK com serviços de IA da OpenAI.
+
+## 📋 Sobre o Projeto
+
+Este aplicativo permite que usuários conversem por vídeo com um agente de IA (representado por um avatar) que sempre se comunica em italiano, mesmo que o usuário fale em português ou outra língua. O sistema realiza:
+
+1. Transcrição de fala do usuário (STT)
+2. Geração de resposta em italiano pelo modelo de linguagem (GPT)
+3. Conversão de texto em voz (TTS) para retorno falado em italiano
+
+## 🛠️ Tecnologias Utilizadas
+
+- **Frontend**: React.js, Agora RTC SDK
+- **Backend**: Node.js, Express
+- **APIs**: OpenAI (Whisper, GPT, TTS), Agora.io
+
+## 🚀 Configuração no GitHub Codespaces
+
+### Passo 1: Criar o Codespace
+
+1. Clique no botão "Code" no repositório
+2. Clique na aba "Codespaces"
+3. Clique em "Create codespace on main"
+
+### Passo 2: Configurar Variáveis de Ambiente
+
+1. No Codespace, crie um arquivo `.env` na raiz do projeto (você pode copiar o `.env.example`):
+
+```bash
+cp .env.example .env
+```
+
+2. Edite o arquivo `.env` com suas credenciais:
+
+```
+# Porta do servidor
+PORT=5000
+
+# Credenciais Agora.io (obtenha em https://console.agora.io/)
+AGORA_APP_ID=your_agora_app_id
+AGORA_APP_CERTIFICATE=your_agora_app_certificate
+
+# Credenciais OpenAI (obtenha em https://platform.openai.com/api-keys)
+OPENAI_API_KEY=your_openai_api_key
+
+# Configurações de Canal Agora
+DEFAULT_CHANNEL_NAME=tutor_italiano_channel
+
+# Ambiente
+NODE_ENV=development
+```
+
+### Passo 3: Instalar Dependências
+
+Execute o comando para instalar todas as dependências:
+
+```bash
+npm run install-all
+```
+
+### Passo 4: Iniciar o Projeto
+
+```bash
+npm start
+```
+
+Isso iniciará tanto o backend (porta 5000) quanto o frontend (porta 3000). O Codespace irá detectar automaticamente a porta e oferecer um link para acessar o aplicativo.
+
+## 📁 Estrutura do Projeto
+
+```
+tutor-italiano-ia/
+├── frontend/              # Código do frontend React
+│   ├── public/
+│   └── src/
+│       ├── components/    # Componentes React
+│       └── services/      # Serviços de API
+└── backend/               # Código do servidor Node.js
+    ├── routes/            # Rotas da API
+    └── services/          # Serviços para OpenAI e Agora
+```
+
+## 📱 Uso do Aplicativo
+
+1. Clique em "Iniciar Conversa" na tela inicial
+2. Permita acesso à sua câmera e microfone quando solicitado
+3. Pressione o botão de microfone e fale (em qualquer idioma)
+4. Solte o botão para enviar sua fala para processamento
+5. O tutor responderá sempre em italiano, com texto e áudio
+
+## 🔑 Obtendo as Credenciais Necessárias
+
+### Agora.io
+1. Crie uma conta em [https://console.agora.io/](https://console.agora.io/)
+2. Crie um novo projeto para obter o App ID
+3. Habilite o Certificate para seu projeto para obter o App Certificate
+
+### OpenAI
+1. Crie uma conta em [https://platform.openai.com/](https://platform.openai.com/)
+2. Crie uma chave de API em [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+3. Adicione créditos à sua conta para usar as APIs de Whisper e TTS
+
+## ⚙️ Configurações Avançadas
+
+Para ajustar as configurações do tutor de IA, você pode modificar o prompt do sistema em `backend/services/openaiServices.js`.
+
+## 📄 Licença
+
+MIT
+</file>
+
+</files>
