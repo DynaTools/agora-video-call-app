@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/agora-video-call-app/static/css/main.34d7f3e1.css",
+    "main.js": "/agora-video-call-app/static/js/main.e3bc3835.js",
+    "static/js/453.5b686afb.chunk.js": "/agora-video-call-app/static/js/453.5b686afb.chunk.js",
+    "index.html": "/agora-video-call-app/index.html",
+    "main.34d7f3e1.css.map": "/agora-video-call-app/static/css/main.34d7f3e1.css.map",
+    "main.e3bc3835.js.map": "/agora-video-call-app/static/js/main.e3bc3835.js.map",
+    "453.5b686afb.chunk.js.map": "/agora-video-call-app/static/js/453.5b686afb.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.34d7f3e1.css",
+    "static/js/main.e3bc3835.js"
+  ]
+}
